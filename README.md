@@ -4,8 +4,7 @@ A responsive Flask application that explores gym membership data, compares churn
 
 ## Website
 
-- **Open the local website:** [http://127.0.0.1:5000/](http://127.0.0.1:5000/) — available while the Flask app is running on your computer.
-- **Public website:** Not deployed yet. Localhost is not public. After deployment, replace this line with the Render `https://...onrender.com` URL.
+
 
 ## Dashboard screenshot
 
@@ -26,48 +25,15 @@ python -m pip install -r requirements.txt
 python app.py
 ```
 
-Open [http://127.0.0.1:5000/](http://127.0.0.1:5000/) in a browser.
 
 If you already installed the dependencies, run only `python app.py` from the project directory.
 
 Run the automated checks:
 
-```powershell
-python -m unittest discover -s tests -v
-```
 
-## Upload to GitHub
 
-1. Create a new empty repository on GitHub. Do not initialize it with a README, license, or `.gitignore`; those already exist in this project.
-2. In PowerShell, open the project folder and run:
 
-   ```powershell
-   cd "$HOME\Desktop\ML"
-   git init
-   git add .
-   git status
-   git commit -m "Prepare gym churn analytics app"
-   git branch -M main
-   git remote add origin https://github.com/YOUR-USERNAME/YOUR-REPOSITORY.git
-   git push -u origin main
-   ```
 
-3. Replace the example remote URL with the HTTPS URL copied from your new GitHub repository. Sign in through Git Credential Manager when prompted; never place a GitHub password or token in the remote URL.
-4. Check `git status` and the GitHub repository page to confirm the files uploaded.
-
-The `.gitignore` excludes Python caches, virtual environments, and binary model files. The small synthetic CSV and dashboard screenshot are included. Render trains fresh model artifacts during its build.
-
-## Deploy on Render
-
-The repository includes `render.yaml` for a Render Blueprint deployment:
-
-1. Push the project to GitHub using the steps above.
-2. In Render, select **New → Blueprint** and connect the GitHub repository. Authorize access if prompted.
-3. Review the service settings from `render.yaml` and deploy. The build installs dependencies and trains/saves the model; the start command launches Flask through Gunicorn using Render's assigned port.
-4. When the deployment is live, open the `onrender.com` URL shown on the Render service page and check the dashboard and prediction page.
-5. Replace the **Public website** placeholder near the top of this README with the Render URL, then commit and push the README update.
-
-The service uses Render's free web service plan, which may spin down after inactivity; its first request after idle can take longer. Model training is disabled on Render to prevent public requests from repeatedly triggering expensive retraining. Local training remains enabled by default. No database or persistent disk is required for the current demonstration app.
 
 ## Application pages
 
