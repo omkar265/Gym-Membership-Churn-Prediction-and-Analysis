@@ -1,0 +1,129 @@
+{% extends 'base.html' %}
+{% block title %}Model Evaluation · Gym Analytics{% endblock %}
+{% block content %}
+<div class="page-heading">
+    <div><div class="eyebrow">MODEL CARD</div><h1>Model evaluation</h1><p>Measured results, test protocol, and model limitations.</p></div>
+</div>
+
+{% if not summary or not summary.results %}
+<div class="panel empty-state large-empty"><strong>Evaluation not available yet.</strong><span>Train the candidate models to create test-set metrics and comparison results.</span></div>
+{% else %}
+{% set selected = (summary.results|selectattr('model', 'equalto', summary.selected_model)|list|first) %}
+<section class="panel model-overview">
+    <div><span class="panel-kicker">SELECTED MODEL</span><h2>{{ summary.model_name or summary.selected_model|replace('_', ' ')|title }}</h2><p>{{ summary.get('selection_method', 'Selection details are not available in this saved evaluation artifact.') }}</p></div>
+    <div class="model-facts">
+        <div><span>Training rows</span><strong>{{ summary.get('training_size', '—') }}</strong></div>
+        <div><span>Test rows</span><strong>{{ summary.get('testing_size', '—') }}</strong></div>
+        <div><span>Test churn cases</span><strong>{{ summary.get('test_class_distribution', {}).get('churn', '—') }}</strong></div>
+        <div><span>Test retained cases</span><strong>{{ summary.get('test_class_distribution', {}).get('no_churn', '—') }}</strong></div>
+    </div>
+</section>
+
+<div class="metric-card-grid">
+    {% for metric, label, description in [
+        ('accuracy', 'Accuracy', 'Overall fraction of correctly classified test records.'),
+        ('precision', 'Precision · Churn', 'Of members predicted to churn, the share that actually churned.'),
+        ('recall', 'Recall · Churn', 'Of members who actually churned, the share identified by the model.'),
+        ('f1', 'F1 · Churn', 'Harmonic mean balancing precision and recall for the positive class.'),
+        ('roc_auc', 'ROC-AUC', 'Ranking performance across classification thresholds, when defined.')
+    ] %}
+    <article class="metric-card"><span>{{ label }}</span><strong>{% if selected.metrics.get(metric) is not none %}{{ '%.3f'|format(selected.metrics[metric]) }}{% else %}N/A{% endif %}</strong><small>{{ description }}</small></article>
+    {% endfor %}
+</div>
+
+<div class="dashboard-grid section-gap">
+    <section class="panel">
+        <div class="panel-heading"><div><h2>Confusion matrix</h2><p>Selected model · held-out test rows</p></div><span class="panel-kicker">ACTUAL × PREDICTED</span></div>
+        <div class="confusion-wrap">
+            <div class="axis-title">Actual label</div>
+            <div class="confusion-table-wrap"><div class="predicted-title">Predicted label</div>
+                <table class="confusion-table">
+                    <thead><tr><th></th><th>No Churn</th><th>Churn</th></tr></thead>
+                    <tbody>
+                        <tr><th>No Churn</th><td class="cm-tn">{{ selected.confusion_matrix[0][0] }}</td><td class="cm-fp">{{ selected.confusion_matrix[0][1] }}</td></tr>
+                        <tr><th>Churn</th><td class="cm-fn">{{ selected.confusion_matrix[1][0] }}</td><td class="cm-tp">{{ selected.confusion_matrix[1][1] }}</td></tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+        <p class="chart-footnote">Churn is the positive class. False negatives are churn cases missed by the model.</p>
+    </section>
+    <section class="panel">
+        <div class="panel-heading"><div><h2>ROC curve</h2><p>True positive rate versus false positive rate</p></div></div>
+        {% if selected.roc_curve %}
+        {% set roc_points = [] %}
+        {% for point in selected.roc_curve %}
+            {% set _ = roc_points.append(((point.fpr * 100)|round(1)|string) ~ ',' ~ ((100 - point.tpr * 100)|round(1)|string)) %}
+        {% endfor %}
+        <div class="roc-chart">
+            <svg viewBox="0 0 100 100" role="img" aria-label="ROC curve with area {{ selected.metrics.roc_auc }}">
+                <path class="roc-grid" d="M0 0V100H100M0 100L100 0"></path>
+                <polyline class="roc-line" points="{{ roc_points|join(' ') }}"></polyline>
+            </svg>
+            <div class="roc-labels"><span>False positive rate</span><span>True positive rate ↑</span></div>
+        </div>
+        <p class="chart-footnote">ROC-AUC: {{ '%.3f'|format(selected.metrics.roc_auc) if selected.metrics.roc_auc is not none else 'Unavailable for this test split.' }}. The diagonal is the random-ranking reference.</p>
+        {% else %}<div class="empty-state">ROC curve unavailable: the test split does not contain both classes or probability scores.</div>{% endif %}
+    </section>
+</div>
+
+<section class="panel section-gap">
+    <div class="panel-heading"><div><h2>Candidate model comparison</h2><p>Holdout metrics use the same test split; cross-validation is conducted only on training rows.</p></div></div>
+    <div class="table-wrap"><table class="data-table comparison-table">
+        <thead><tr><th>Algorithm</th><th>CV F1 mean ± SD<br><small>Churn · training only</small></th><th>CV ROC-AUC<br><small>training only</small></th><th>Accuracy</th><th>Precision<br><small>Churn</small></th><th>Recall<br><small>Churn</small></th><th>F1<br><small>Churn</small></th><th>ROC-AUC</th><th>Selected</th></tr></thead>
+        <tbody>{% for result in summary.results %}
+            <tr class="{% if result.model == summary.selected_model %}selected-row{% endif %}">
+                <td>{{ result.model|replace('_', ' ')|title }}</td>
+                <td>{% if result.cross_validation is defined %}{{ '%.3f'|format(result.cross_validation.f1_churn_mean) }} ± {{ '%.3f'|format(result.cross_validation.f1_churn_std) }}{% else %}N/A{% endif %}</td>
+                <td>{{ '%.3f'|format(result.cross_validation.roc_auc_mean) if result.cross_validation is defined else 'N/A' }}</td>
+                <td>{{ '%.3f'|format(result.metrics.accuracy) }}</td>
+                <td>{{ '%.3f'|format(result.metrics.precision) }}</td>
+                <td>{{ '%.3f'|format(result.metrics.recall) }}</td>
+                <td>{{ '%.3f'|format(result.metrics.f1) }}</td>
+                <td>{{ '%.3f'|format(result.metrics.roc_auc) if result.metrics.roc_auc is not none else 'N/A' }}</td>
+                <td>{% if result.model == summary.selected_model %}<span class="selected-tag">Selected</span>{% else %}—{% endif %}</td>
+            </tr>
+        {% endfor %}</tbody>
+    </table></div>
+</section>
+
+<div class="dashboard-grid section-gap">
+    <section class="panel">
+        <div class="panel-heading"><div><h2>Classification report</h2><p>Per-class precision, recall, and F1 from test predictions</p></div></div>
+        <div class="table-wrap"><table class="data-table">
+            <thead><tr><th>Class / average</th><th>Precision</th><th>Recall</th><th>F1-score</th><th>Support</th></tr></thead>
+            <tbody>{% for label in ['No Churn', 'Churn', 'macro avg', 'weighted avg'] %}
+                {% set row = selected.classification_report[label] %}
+                <tr class="{% if label == 'Churn' %}positive-row{% endif %}"><td>{{ label }}{% if label == 'Churn' %} <span class="table-tag">POSITIVE</span>{% endif %}</td><td>{{ '%.3f'|format(row.precision) }}</td><td>{{ '%.3f'|format(row.recall) }}</td><td>{{ '%.3f'|format(row['f1-score']) }}</td><td>{{ row.support|int }}</td></tr>
+            {% endfor %}</tbody>
+        </table></div>
+        <div class="explain-box"><strong>F1 = 2 × (Precision × Recall) / (Precision + Recall)</strong><p>Precision measures how many predicted Churn cases were actually churn. Recall measures how many actual churn cases were found. F1 balances these two values; it is low when either precision or recall is low.</p></div>
+    </section>
+    <section class="panel">
+        <div class="panel-heading"><div><h2>Training methodology</h2><p>Recorded configuration and preprocessing</p></div></div>
+        <dl class="detail-list">
+            <div><dt>Split strategy</dt><dd>Stratified holdout test split</dd></div>
+            <div><dt>Test fraction</dt><dd>{{ summary.train_test_split.get('test_size', 'Unavailable') }}</dd></div>
+            <div><dt>Random seed</dt><dd>{{ summary.train_test_split.get('random_state', 'Unavailable') }}</dd></div>
+            <div><dt>Model selection</dt><dd>{{ summary.get('selection_method', 'Selection details unavailable.') }}</dd></div>
+            <div><dt>Numeric preprocessing</dt><dd>{{ summary.get('preprocessing', {}).get('numeric', 'Not recorded in existing artifact.') }}</dd></div>
+            <div><dt>Categorical preprocessing</dt><dd>{{ summary.get('preprocessing', {}).get('categorical', 'Not recorded in existing artifact.') }}</dd></div>
+        </dl>
+        <div class="subsection-title">Selected model parameters</div>
+        <div class="parameter-list">{% for name, value in summary.get('hyperparameters', {}).items() %}<span><b>{{ name }}</b> {{ value }}</span>{% else %}<span>Parameter details unavailable in the saved summary.</span>{% endfor %}</div>
+    </section>
+</div>
+
+{% if summary.get('feature_importance') %}
+<section class="panel section-gap">
+    <div class="panel-heading"><div><h2>Feature importance</h2><p>Top impurity-based importances from the selected tree model</p></div><span class="panel-kicker">EXPLORATORY</span></div>
+    {% for item in summary.feature_importance %}
+    <div class="importance-row"><span>{{ item.feature }}</span><div class="metric-track"><i style="width:{{ (item.importance / summary.feature_importance[0].importance * 100) if summary.feature_importance[0].importance else 0 }}%"></i></div><strong>{{ '%.4f'|format(item.importance) }}</strong></div>
+    {% endfor %}
+    <p class="chart-footnote">Impurity-based importance can favor certain feature types and does not imply causation. Encoded categories appear as separate features.</p>
+</section>
+{% endif %}
+
+<div class="footnote-card"><strong>Interpretation and limitation</strong><p>Accuracy alone can hide missed churn cases. Review Churn recall and precision alongside F1. These metrics describe this synthetic dataset's held-out split only and do not establish future performance on real gym members.</p></div>
+{% endif %}
+{% endblock %}

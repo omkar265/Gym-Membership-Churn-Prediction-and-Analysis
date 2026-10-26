@@ -1,0 +1,12 @@
+services:
+  - type: web
+    name: gym-churn-analytics
+    runtime: python
+    plan: free
+    buildCommand: pip install -r requirements.txt && python -c "from src.ml_pipeline import train_and_evaluate_models; train_and_evaluate_models()"
+    startCommand: gunicorn app:app --bind 0.0.0.0:$PORT --workers 1 --threads 4 --timeout 120
+    envVars:
+      - key: PYTHON_VERSION
+        value: 3.13.7
+      - key: ENABLE_MODEL_TRAINING
+        value: "false"

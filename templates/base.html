@@ -1,0 +1,55 @@
+<!doctype html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="theme-color" content="#f5f7fb">
+    <title>{% block title %}Gym Churn Analytics{% endblock %}</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+</head>
+<body>
+    <div class="app-layout">
+        <aside class="sidebar">
+            <a class="brand" href="{{ url_for('overview') }}">
+                <span class="brand-icon">G</span>
+                <span><strong>Gym Analytics</strong><small>Membership intelligence</small></span>
+            </a>
+            <div class="nav-caption">WORKSPACE</div>
+            <nav class="nav-list" aria-label="Main navigation">
+                <a href="{{ url_for('overview') }}" class="{% if request.endpoint == 'overview' %}active{% endif %}">
+                    <span class="nav-icon">▦</span>Dashboard
+                </a>
+                <a href="{{ url_for('prediction_page') }}" class="{% if request.endpoint == 'prediction_page' %}active{% endif %}">
+                    <span class="nav-icon">⌁</span>Predict churn
+                </a>
+                <a href="{{ url_for('dataset_page') }}" class="{% if request.endpoint in ['dataset_page', 'dataset_report'] %}active{% endif %}">
+                    <span class="nav-icon">▤</span>Dataset analysis
+                </a>
+                <a href="{{ url_for('evaluation_page') }}" class="{% if request.endpoint == 'evaluation_page' %}active{% endif %}">
+                    <span class="nav-icon">⌗</span>Model evaluation
+                </a>
+                <a href="{{ url_for('about_page') }}" class="{% if request.endpoint == 'about_page' %}active{% endif %}">
+                    <span class="nav-icon">ⓘ</span>Project information
+                </a>
+            </nav>
+            <div class="sidebar-note">
+                <span class="note-dot"></span>
+                <span>Academic project<br><small>Synthetic demonstration data</small></span>
+            </div>
+        </aside>
+
+        <div class="main-area">
+            <header class="topbar">
+                <div class="mobile-brand"><span class="brand-icon">G</span><strong>Gym Analytics</strong></div>
+                <div class="topbar-label">Gym Membership Churn Prediction and Analysis</div>
+                <span class="topbar-tag">MODEL-DRIVEN INSIGHTS</span>
+            </header>
+            <main class="content">
+                {% block content %}{% endblock %}
+            </main>
+            <footer class="footer">Predictions are estimates for academic demonstration and are not guaranteed outcomes.</footer>
+        </div>
+    </div>
+    {% block scripts %}{% endblock %}
+</body>
+</html>

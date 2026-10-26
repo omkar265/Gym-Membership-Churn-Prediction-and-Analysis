@@ -1,0 +1,82 @@
+{% extends 'base.html' %}
+{% block title %}Dataset Analysis · Gym Analytics{% endblock %}
+{% block content %}
+<div class="page-heading">
+    <div><div class="eyebrow">DATA EXPLORATION</div><h1>Dataset analysis</h1><p>Schema, quality checks, summary statistics, and relationships with the churn label.</p></div>
+    <a class="button button-secondary" href="{{ url_for('dataset_report') }}">Download analysis CSV <span>↓</span></a>
+</div>
+
+<div class="summary-strip">
+    <div><span>Records</span><strong>{{ "{:,}".format(analysis.rows) }}</strong></div>
+    <div><span>Columns</span><strong>{{ analysis.columns_count }}</strong></div>
+    <div><span>Missing values</span><strong>{{ analysis.missing_total }}</strong></div>
+    <div><span>Duplicate rows</span><strong>{{ analysis.duplicate_count }}</strong></div>
+    <div><span>Target</span><strong>{{ analysis.target or 'Not identified' }}</strong></div>
+</div>
+
+<section class="panel section-gap">
+    <div class="panel-heading"><div><h2>Column inventory</h2><p>Feature names and properties observed in the current CSV</p></div><span class="panel-kicker">{{ analysis.columns_count }} COLUMNS</span></div>
+    <div class="table-wrap"><table class="data-table">
+        <thead><tr><th>Column</th><th>Data type</th><th>Missing</th><th>Unique</th><th>Description</th></tr></thead>
+        <tbody>{% for column in analysis.columns %}<tr><td><code>{{ column.name }}</code>{% if column.name == analysis.target %}<span class="table-tag">TARGET</span>{% endif %}</td><td>{{ column.dtype }}</td><td>{{ column.missing }}</td><td>{{ column.unique }}</td><td>{{ column.description }}</td></tr>{% endfor %}</tbody>
+    </table></div>
+</section>
+
+<div class="dashboard-grid section-gap">
+    <section class="panel">
+        <div class="panel-heading"><div><h2>Target distribution</h2><p>Historical labels, not model predictions</p></div></div>
+        {% set churn_n = analysis.target_distribution.get('1', 0)|int %}
+        {% set retained_n = analysis.target_distribution.get('0', 0)|int %}
+        {% set churn_pct = (churn_n / analysis.rows * 100) if analysis.rows else 0 %}
+        <div class="distribution-row"><span>Churn (1)</span><div class="metric-track"><i class="churn-fill" style="width:{{ churn_pct }}%"></i></div><strong>{{ churn_n }}</strong></div>
+        <div class="distribution-row"><span>Retained (0)</span><div class="metric-track"><i class="retained-fill" style="width:{{ 100 - churn_pct }}%"></i></div><strong>{{ retained_n }}</strong></div>
+        <p class="chart-footnote">Class mapping is based on this project's target definition: 1 = churn, 0 = retained.</p>
+    </section>
+    <section class="panel">
+        <div class="panel-heading"><div><h2>Numeric feature association</h2><p>Pearson correlation with churn label</p></div></div>
+        {% if analysis.correlations %}
+        {% for item in analysis.correlations %}
+        <div class="correlation-row"><span>{{ item.name.replace('_', ' ')|title }}</span><div class="correlation-track"><i style="width:{{ (item.correlation|abs * 100)|round(1) }}%;{% if item.correlation < 0 %}background:var(--teal);{% endif %}"></i></div><strong>{{ '%+.2f'|format(item.correlation) }}</strong></div>
+        {% endfor %}
+        <p class="chart-footnote">Correlations are descriptive associations and do not establish causation.</p>
+        {% else %}<div class="empty-state">Correlation is unavailable for this dataset.</div>{% endif %}
+    </section>
+</div>
+
+<section class="panel section-gap">
+    <div class="panel-heading"><div><h2>Numerical feature statistics</h2><p>Computed from the dataset as loaded</p></div></div>
+    <div class="table-wrap"><table class="data-table">
+        <thead><tr><th>Feature</th><th>Count</th><th>Mean</th><th>Std. dev.</th><th>Minimum</th><th>Median</th><th>Maximum</th></tr></thead>
+        <tbody>{% for item in analysis.numeric_statistics %}<tr><td><code>{{ item.name }}</code></td><td>{{ item.count }}</td><td>{{ '%.2f'|format(item.mean) if item.mean is not none else '—' }}</td><td>{{ '%.2f'|format(item.std) if item.std is not none else '—' }}</td><td>{{ '%.2f'|format(item.min) if item.min is not none else '—' }}</td><td>{{ '%.2f'|format(item.median) if item.median is not none else '—' }}</td><td>{{ '%.2f'|format(item.max) if item.max is not none else '—' }}</td></tr>{% endfor %}</tbody>
+    </table></div>
+</section>
+
+{% if analysis.numerical_churn_means %}
+<section class="panel section-gap">
+    <div class="panel-heading"><div><h2>Numerical features by churn outcome</h2><p>Group means from the actual labels</p></div></div>
+    <div class="table-wrap"><table class="data-table">
+        <thead><tr><th>Feature</th><th>Retained mean</th><th>Churn mean</th><th>Difference (churn − retained)</th></tr></thead>
+        <tbody>{% for item in analysis.numerical_churn_means %}<tr><td><code>{{ item.name }}</code></td><td>{{ '%.2f'|format(item.retained_mean) if item.retained_mean is not none else '—' }}</td><td>{{ '%.2f'|format(item.churn_mean) if item.churn_mean is not none else '—' }}</td><td>{% if item.churn_mean is not none and item.retained_mean is not none %}{{ '%+.2f'|format(item.churn_mean - item.retained_mean) }}{% else %}—{% endif %}</td></tr>{% endfor %}</tbody>
+    </table></div>
+</section>
+{% endif %}
+
+{% for name, distribution in analysis.categorical_distributions.items() %}
+<section class="panel section-gap">
+    <div class="panel-heading"><div><h2>{{ name.replace('_', ' ')|title }} distribution</h2><p>Most frequent values in the dataset</p></div></div>
+    <div class="category-grid">
+        {% for item in distribution %}
+        <div class="category-row"><span>{{ item.value }}</span><div class="metric-track"><i style="width:{{ (item.count / analysis.rows * 100) if analysis.rows else 0 }}%"></i></div><strong>{{ item.count }}</strong></div>
+        {% endfor %}
+    </div>
+    {% if name in analysis.categorical_churn %}
+    <div class="subsection-title">Historical churn rate by {{ name.replace('_', ' ') }}</div>
+    <div class="category-grid">{% for item in analysis.categorical_churn[name] %}
+        <div class="category-row"><span>{{ item.value }} <small>({{ item.records }})</small></span><div class="metric-track"><i class="churn-fill" style="width:{{ (item.churn_rate * 100)|round(1) }}%"></i></div><strong>{{ (item.churn_rate * 100)|round(1) }}%</strong></div>
+    {% endfor %}</div>
+    {% endif %}
+</section>
+{% endfor %}
+
+<div class="footnote-card"><strong>Data note</strong><p>The CSV is synthetic demonstration data. Its patterns and statistics do not describe real gym members.</p></div>
+{% endblock %}

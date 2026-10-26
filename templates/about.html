@@ -1,0 +1,24 @@
+{% extends 'base.html' %}
+{% block title %}Project Information · Gym Analytics{% endblock %}
+{% block content %}
+<div class="page-heading"><div><div class="eyebrow">PROJECT</div><h1>Project information</h1><p>A student-focused demonstration of a complete binary classification workflow.</p></div></div>
+<div class="info-layout">
+    <section class="panel">
+        <div class="panel-heading"><div><h2>Gym Membership Churn Prediction and Analysis</h2><p>Machine learning as a decision-support demonstration</p></div></div>
+        <p class="body-copy">This project explores whether available membership characteristics are associated with the churn label in a gym dataset. It provides data inspection, model comparison, held-out evaluation, and a form that runs inference with the saved preprocessing and classifier pipeline.</p>
+        <div class="subsection-title">Technology</div>
+        <div class="technology-tags"><span>Python</span><span>Flask</span><span>Pandas</span><span>NumPy</span><span>scikit-learn</span><span>Joblib</span><span>HTML · CSS · JavaScript</span></div>
+    </section>
+    <section class="panel">
+        <div class="panel-heading"><div><h2>Project facts</h2><p>Current implementation</p></div></div>
+        <dl class="detail-list">
+            <div><dt>Dataset</dt><dd>Synthetic demonstration data stored in the existing project CSV.</dd></div>
+            <div><dt>Target</dt><dd>churn (1 = churn, 0 = retained)</dd></div>
+            <div><dt>Algorithms</dt><dd>Logistic Regression, Decision Tree, Random Forest</dd></div>
+            <div><dt>Selected model</dt><dd>{{ summary.selected_model|replace('_', ' ')|title if summary else 'Not trained yet' }}</dd></div>
+            <div><dt>Selection metric</dt><dd>Churn-class F1 on the shared holdout split</dd></div>
+        </dl>
+    </section>
+</div>
+<div class="footnote-card"><strong>Limitations</strong><p>The dataset is synthetic, so its statistics and model results do not establish real-world gym behavior or performance. Churn predictions are estimates—not guarantees—and no validated intervention threshold has been defined. A model score alone should not determine how a real member is treated.</p></div>
+{% endblock %}

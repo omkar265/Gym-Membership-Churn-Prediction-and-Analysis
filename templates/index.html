@@ -1,0 +1,94 @@
+{% extends 'base.html' %}
+{% block title %}Dashboard · Gym Analytics{% endblock %}
+{% block content %}
+<div class="page-heading">
+    <div>
+        <div class="eyebrow">OVERVIEW</div>
+        <h1>Dashboard</h1>
+        <p>Historical membership outcomes and the current model status.</p>
+    </div>
+    <a class="button button-secondary" href="{{ url_for('dataset_page') }}">Explore dataset <span>→</span></a>
+</div>
+
+<div class="kpi-grid">
+    <article class="kpi-card"><div class="kpi-heading"><span>Total members analyzed</span><span class="kpi-icon blue">▤</span></div><div class="kpi-value">{{ "{:,}".format(dashboard.total_records) }}</div><div class="kpi-detail">Records in the current dataset</div></article>
+    <article class="kpi-card"><div class="kpi-heading"><span>Actually churned</span><span class="kpi-icon rose">↗</span></div><div class="kpi-value">{{ "{:,}".format(dashboard.actual_churn_count) }}</div><div class="kpi-detail">Historical target label = churn</div></article>
+    <article class="kpi-card"><div class="kpi-heading"><span>Retained members</span><span class="kpi-icon green">✓</span></div><div class="kpi-value">{{ "{:,}".format(dashboard.retained_count) }}</div><div class="kpi-detail">Historical target label = retained</div></article>
+    <article class="kpi-card"><div class="kpi-heading"><span>Historical churn rate</span><span class="kpi-icon amber">%</span></div><div class="kpi-value">{{ dashboard.actual_churn_rate }}<small>%</small></div><div class="kpi-detail">Calculated from actual target labels</div></article>
+    <article class="kpi-card"><div class="kpi-heading"><span>Predicted churn class · in-sample</span><span class="kpi-icon violet">⌁</span></div><div class="kpi-value">{% if dashboard.predicted_high_risk_count is not none %}{{ "{:,}".format(dashboard.predicted_high_risk_count) }}{% else %}—{% endif %}</div><div class="kpi-detail">Model classifications, not confirmed churn</div></article>
+    <article class="kpi-card"><div class="kpi-heading"><span>Trained model</span><span class="kpi-icon {% if dashboard.model_ready %}green{% else %}amber{% endif %}">●</span></div><div class="model-status">{% if dashboard.model_ready %}<span class="status-dot"></span>Ready{% else %}Not available{% endif %}</div><div class="kpi-detail">{{ dashboard.selected_model or 'Train models to enable predictions' }}</div></article>
+</div>
+
+<div class="dashboard-grid">
+    <section class="panel">
+        <div class="panel-heading"><div><h2>Member outcomes</h2><p>Actual historical churn labels</p></div><span class="panel-kicker">DATASET</span></div>
+        <div class="outcome-layout">
+            <div class="donut" style="--churn: {{ dashboard.actual_churn_rate }}%;" role="img" aria-label="Churned {{ dashboard.actual_churn_count }}, retained {{ dashboard.retained_count }}">
+                <div class="donut-center"><strong>{{ dashboard.actual_churn_rate }}%</strong><span>churned</span></div>
+            </div>
+            <div class="legend">
+                <div class="legend-row"><span class="legend-label"><i class="legend-dot churn"></i>Churned</span><strong>{{ "{:,}".format(dashboard.actual_churn_count) }}</strong></div>
+                <div class="legend-row"><span class="legend-label"><i class="legend-dot retained"></i>Retained</span><strong>{{ "{:,}".format(dashboard.retained_count) }}</strong></div>
+                <div class="divider"></div>
+                <p class="chart-footnote">The chart describes recorded historical labels only; it does not represent predictions.</p>
+            </div>
+        </div>
+        <div class="stacked-bar" aria-label="Distribution of historical churn and retention">
+            <span class="bar-churn" style="width:{{ dashboard.actual_churn_rate }}%"></span>
+            <span class="bar-retained" style="width:{{ 100 - dashboard.actual_churn_rate }}%"></span>
+        </div>
+        <div class="bar-legend"><span>Churn {{ dashboard.actual_churn_rate }}%</span><span>Retained {{ (100 - dashboard.actual_churn_rate)|round(2) }}%</span></div>
+    </section>
+
+    <section class="panel">
+        <div class="panel-heading"><div><h2>Member characteristics</h2><p>Mean values by actual churn outcome</p></div><span class="panel-kicker">EXPLORATORY</span></div>
+        {% set chart_names = ['attendance_rate_percent', 'engagement_score', 'recent_visits_last_month', 'membership_duration_months'] %}
+        {% set characteristics = analysis.numerical_churn_means|selectattr('name', 'in', chart_names)|list %}
+        {% if characteristics %}
+        <div class="comparison-chart">
+            {% for item in characteristics %}
+            {% set scale = [item.retained_mean or 0, item.churn_mean or 0]|max %}
+            <div class="comparison-row">
+                <div class="comparison-title">{{ item.name.replace('_', ' ')|title }}</div>
+                <div class="comparison-bars">
+                    <div class="compare-line"><span class="compare-label">Retained</span><span class="compare-track"><i class="compare-fill retained-fill" style="width:{{ ((item.retained_mean or 0) / scale * 100) if scale else 0 }}%"></i></span><b>{{ '%.1f'|format(item.retained_mean or 0) }}</b></div>
+                    <div class="compare-line"><span class="compare-label">Churned</span><span class="compare-track"><i class="compare-fill churn-fill" style="width:{{ ((item.churn_mean or 0) / scale * 100) if scale else 0 }}%"></i></span><b>{{ '%.1f'|format(item.churn_mean or 0) }}</b></div>
+                </div>
+            </div>
+            {% endfor %}
+        </div>
+        <div class="bar-legend"><span><i class="legend-dot retained"></i>Retained</span><span><i class="legend-dot churn"></i>Churned</span></div>
+        {% else %}<div class="empty-state">No numerical member characteristics are available for comparison.</div>{% endif %}
+    </section>
+
+    <section class="panel">
+        <div class="panel-heading"><div><h2>Model performance</h2><p>Selected model · held-out test data</p></div><a class="text-link" href="{{ url_for('evaluation_page') }}">Details →</a></div>
+        {% if summary and summary.results %}
+            {% set selected = (summary.results|selectattr('model', 'equalto', summary.selected_model)|list|first) %}
+            <div class="model-summary-name">{{ summary.selected_model|replace('_', ' ')|title }}</div>
+            <div class="metric-bars">
+                {% for metric, label in [('accuracy', 'Accuracy'), ('precision', 'Precision'), ('recall', 'Recall'), ('f1', 'F1-score')] %}
+                <div class="metric-bar-row"><span>{{ label }}</span><div class="metric-track"><i style="width:{{ (selected.metrics[metric] * 100)|round(1) }}%"></i></div><strong>{{ '%.3f'|format(selected.metrics[metric]) }}</strong></div>
+                {% endfor %}
+            </div>
+            <p class="chart-footnote">Positive class: Churn. Metrics are calculated from the held-out test split.</p>
+        {% else %}
+            <div class="empty-state"><strong>Evaluation not available yet.</strong><span>Train the candidate models to view measured performance.</span></div>
+        {% endif %}
+    </section>
+
+    <section class="panel observation-panel">
+        <div class="panel-heading"><div><h2>Dataset at a glance</h2><p>Observed data quality and class balance</p></div><a class="text-link" href="{{ url_for('dataset_page') }}">Full analysis →</a></div>
+        <div class="observation-list">
+            <div><span>Dataset dimensions</span><strong>{{ analysis.rows|int }} rows · {{ analysis.columns_count }} columns</strong></div>
+            <div><span>Missing values</span><strong>{{ analysis.missing_total }}</strong></div>
+            <div><span>Duplicate rows</span><strong>{{ analysis.duplicate_count }}</strong></div>
+            {% if analysis.correlations %}
+            {% set strongest = analysis.correlations[0] %}
+            <div><span>Largest numeric association with churn</span><strong>{{ strongest.name.replace('_', ' ')|title }} · r={{ '%.2f'|format(strongest.correlation) }}</strong></div>
+            {% endif %}
+        </div>
+        <p class="chart-footnote">Correlation is descriptive, not evidence that a feature causes churn.</p>
+    </section>
+</div>
+{% endblock %}

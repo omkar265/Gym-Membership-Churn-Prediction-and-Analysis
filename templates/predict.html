@@ -1,0 +1,126 @@
+{% extends 'base.html' %}
+{% block title %}Predict Churn · Gym Analytics{% endblock %}
+{% block content %}
+<div class="page-heading">
+    <div><div class="eyebrow">MEMBER ASSESSMENT</div><h1>Predict churn</h1><p>Enter member information to estimate the model's predicted churn class.</p></div>
+</div>
+
+{% if not model_ready %}
+<section class="panel notice-panel"><div class="notice-icon">!</div><div><h2>Model not trained</h2><p>Train the candidate models before generating predictions. The current dataset fields are shown below for reference.</p></div><button class="button button-primary" id="train-model">Train models</button></section>
+{% endif %}
+
+<div class="prediction-layout">
+    <section class="panel prediction-form-panel">
+        <div class="panel-heading"><div><h2>Member information</h2><p>Fields are generated from the trained model's expected input schema.</p></div><span class="panel-kicker">{{ fields|length }} FEATURES</span></div>
+        <form id="prediction-form" novalidate>
+            <div class="form-grid">
+                {% for field in fields %}
+                <div class="form-field">
+                    <label for="{{ field.name }}">{{ field.label }}</label>
+                    {% if field.kind == 'category' %}
+                    <select id="{{ field.name }}" name="{{ field.name }}" required>
+                        {% for choice in field.choices %}
+                        <option value="{{ choice }}" {% if choice == field.default %}selected{% endif %}>{{ choice.replace('_', ' ')|title }}</option>
+                        {% endfor %}
+                    </select>
+                    {% else %}
+                    <input id="{{ field.name }}" name="{{ field.name }}" type="number" value="{{ field.default }}" min="{{ field.minimum }}" max="{{ field.maximum }}" {% if field.integer %}step="1"{% else %}step="any"{% endif %} required inputmode="decimal">
+                    {% endif %}
+                    {% if field.kind == 'number' %}<small>Accepted range: {{ '%.2f'|format(field.minimum) }}–{{ '%.2f'|format(field.maximum) }}</small>{% endif %}
+                </div>
+                {% endfor %}
+            </div>
+            <div class="form-actions">
+                <button class="button button-primary" type="submit" {% if not model_ready %}disabled{% endif %}><span class="button-label">Run prediction</span></button>
+                <button class="button button-secondary" type="reset">Reset fields</button>
+            </div>
+        </form>
+    </section>
+    <aside class="panel prediction-aside">
+        <div class="panel-heading"><div><h2>How to read this</h2></div></div>
+        <div class="explanation-block"><span class="explanation-mark">01</span><div><strong>Predicted class</strong><p>Churn or No Churn, as returned by the saved classifier.</p></div></div>
+        <div class="explanation-block"><span class="explanation-mark">02</span><div><strong>Probability</strong><p>Shown only if supported by the model. It is an estimated model score, not certainty.</p></div></div>
+        <div class="explanation-block"><span class="explanation-mark">03</span><div><strong>Risk category</strong><p>No Low/Medium/High band is applied because this project has no separately validated decision threshold.</p></div></div>
+        <div class="caution-box">This model was trained on synthetic demonstration data. Do not use its outputs to make real membership decisions.</div>
+    </aside>
+</div>
+<div id="prediction-result" class="result-panel" aria-live="polite" hidden></div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+(() => {
+    const form = document.getElementById('prediction-form');
+    const result = document.getElementById('prediction-result');
+    const trainButton = document.getElementById('train-model');
+    const numericFields = new Set({{ fields|selectattr('kind', 'equalto', 'number')|map(attribute='name')|list|tojson }});
+
+    form.addEventListener('submit', async (event) => {
+        event.preventDefault();
+        result.hidden = false;
+        result.className = 'result-panel is-loading';
+        result.textContent = 'Running prediction…';
+        const payload = Object.fromEntries(new FormData(form).entries());
+        for (const field of numericFields) {
+            const input = form.elements.namedItem(field);
+            if (!input.value.trim() || !Number.isFinite(Number(input.value))) {
+                input.focus();
+                result.className = 'result-panel is-error';
+                result.textContent = `Enter a valid number for ${input.labels[0].textContent}.`;
+                return;
+            }
+            payload[field] = Number(input.value);
+        }
+
+        try {
+            const response = await fetch('{{ url_for("api_predict") }}', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify(payload)
+            });
+            const data = await response.json();
+            if (!response.ok) throw new Error(data.message || 'Prediction failed.');
+            result.className = `result-panel ${data.prediction === 1 ? 'is-churn' : 'is-retained'}`;
+            const heading = document.createElement('strong');
+            heading.className = 'result-heading';
+            heading.textContent = `Predicted class: ${data.label}`;
+            const probability = document.createElement('p');
+            probability.textContent = data.probability === null
+                ? 'Probability estimate is unavailable for this model.'
+                : `Estimated probability of Churn: ${(data.probability * 100).toFixed(1)}%`;
+            const note = document.createElement('small');
+            note.textContent = data.explanation;
+            result.replaceChildren(heading, probability, note);
+        } catch (error) {
+            result.className = 'result-panel is-error';
+            result.textContent = `Prediction error: ${error.message}`;
+        }
+    });
+
+    form.addEventListener('reset', () => {
+        result.hidden = true;
+        result.replaceChildren();
+    });
+
+    if (trainButton) {
+        trainButton.addEventListener('click', async () => {
+            trainButton.disabled = true;
+            trainButton.textContent = 'Training…';
+            try {
+                const response = await fetch('{{ url_for("train_endpoint") }}', {method: 'POST'});
+                const data = await response.json();
+                if (!response.ok) throw new Error(data.message || 'Training failed.');
+                window.location.reload();
+            } catch (error) {
+                trainButton.disabled = false;
+                trainButton.textContent = 'Retry training';
+                const message = document.createElement('p');
+                message.className = 'form-error';
+                message.textContent = error.message;
+                trainButton.parentElement.appendChild(message);
+            }
+        });
+    }
+})();
+</script>
+{% endblock %}
